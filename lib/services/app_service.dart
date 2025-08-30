@@ -1,71 +1,167 @@
+import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/user_profile.dart';
+import 'package:ecowatch/models/user_profile.dart';
+import 'package:ecowatch/models/report.dart';
 
-/// Service class to encapsulate Authentication and Firestore logic.
+// This class handles all interactions with Firebase services.
 class AppService {
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  // Singleton pattern to ensure only one instance of AppService is created.
+  static final AppService _instance = AppService._internal();
+  factory AppService() => _instance;
+
+  AppService._internal();
+
+  // Firebase service instances
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late FirebaseFirestore _firestore; // For our secondary database project
 
-  /// Stream to listen for authentication state changes.
-  Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
+  bool _secondaryAppInitialized = false;
 
-  /// Signs in with Google and checks if it's a new user.
-  Future<(UserCredential, bool)> signInWithGoogle() async {
-    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-    if (googleUser == null) throw FirebaseAuthException(code: 'USER_CANCELED');
+  // --- INITIALIZATION FOR TWO-PROJECT SETUP ---
 
-    final GoogleSignInAuthentication googleAuth =
-        await googleUser.authentication;
-    final OAuthCredential credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
+  Future<void> _initializeSecondaryApp() async {
+    if (_secondaryAppInitialized) return;
 
-    final userCredential = await _firebaseAuth.signInWithCredential(credential);
-    final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+    try {
+      const FirebaseOptions firestoreOptions = FirebaseOptions(
+        apiKey: "AIzaSyBNeSFmYV5cI3WW6N8ZIF9J6HJDHwqCOyU",
+        appId: "1:732511249252:web:53a7923f0137d73e20d071",
+        messagingSenderId: "732511249252",
+        projectId: "ecowatch-470604",
+        authDomain: "ecowatch-470604.firebaseapp.com",
+        storageBucket: "ecowatch-470604.appspot.com",
+      );
 
-    return (userCredential, isNewUser);
+      FirebaseApp secondaryApp = await Firebase.initializeApp(
+        name: 'FirestoreApp',
+        options: firestoreOptions,
+      );
+
+      _firestore = FirebaseFirestore.instanceFor(app: secondaryApp);
+      _secondaryAppInitialized = true;
+      print(
+        "SUCCESS: Secondary Firestore connection initialized to project ecowatch-470604.",
+      );
+    } catch (e) {
+      print("!!! CRITICAL: FAILED to initialize secondary Firebase app: $e");
+    }
   }
 
-  /// Checks if a user profile document exists in Firestore.
+  // --- AUTHENTICATION METHODS ---
+
+  Future<User?> signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null;
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
+      return userCredential.user;
+    } catch (e) {
+      print("Error during Google sign-in: $e");
+      return null;
+    }
+  }
+
+  Future<void> signOut() async {
+    await _googleSignIn.signOut();
+    await _auth.signOut();
+  }
+
+  // A stream to listen for changes in the authentication state (login/logout).
+  Stream<User?> get userChanges => _auth.authStateChanges();
+
+  // --- FIRESTORE METHODS (for user profiles) ---
+
   Future<bool> doesUserProfileExist(String uid) async {
+    await _initializeSecondaryApp();
     final doc = await _firestore.collection('users').doc(uid).get();
     return doc.exists;
   }
 
-  /// Creates a new user profile document in Firestore, matching the desired structure.
-  Future<void> createUserProfile({
-    required String uid,
-    required String name,
-    required String email,
-    required String role,
-  }) async {
-    await _firestore.collection('users').doc(uid).set({
-      'name': name,
-      'email': email,
-      'role': role,
-      'points': 0,
-      'badges': 'Newbie',
-      'uuid': uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+  Future<void> createUserProfile(UserProfile profile) async {
+    await _initializeSecondaryApp();
+    print("--- Creating Firestore Profile in project: ecowatch-470604 ---");
+    // FIX: Changed profile.uuid to profile.uid
+    await _firestore
+        .collection('users')
+        .doc(profile.uid)
+        // FIX: The UserProfile model now has a toJson() method.
+        .set(profile.toJson());
   }
 
-  /// Fetches a user profile from Firestore as a stream.
   Stream<UserProfile?> getUserProfile(String uid) {
+    _initializeSecondaryApp();
     return _firestore
         .collection('users')
         .doc(uid)
         .snapshots()
-        .map((doc) => doc.exists ? UserProfile.fromFirestore(doc) : null);
+        .map(
+          // FIX: The UserProfile model now has a fromJson() method.
+          (snapshot) =>
+              snapshot.exists ? UserProfile.fromJson(snapshot.data()!) : null,
+        );
   }
 
-  /// Signs the user out from Google and Firebase.
-  Future<void> signOut() async {
-    await _googleSignIn.signOut();
-    await _firebaseAuth.signOut();
+  // --- FIRESTORE METHODS (for reports) ---
+  Stream<List<Report>> getReportsForUser(String uid) {
+    _initializeSecondaryApp();
+
+    final reportsQuery = _firestore
+        .collection('flutter_to_flask_to_Gemini')
+        // FIX: The field in Firestore for the user ID is 'uuid', but our model uses 'uid'.
+        // We query Firestore with 'uuid' to match the database schema.
+        .where('uuid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true);
+
+    return reportsQuery.snapshots().asyncMap((reportSnapshot) async {
+      final List<Report> reports = [];
+      for (final reportDoc in reportSnapshot.docs) {
+        final reportData = reportDoc.data();
+        final pkey = reportData['pkey'];
+
+        final analysisQuery = await _firestore
+            .collection('Gemini_to_Flask')
+            .where('pkey', isEqualTo: pkey)
+            .limit(1)
+            .get();
+
+        final gamificationQuery = await _firestore
+            .collection('Gamification')
+            .where('pkey', isEqualTo: pkey)
+            .limit(1)
+            .get();
+
+        if (analysisQuery.docs.isNotEmpty &&
+            gamificationQuery.docs.isNotEmpty) {
+          reports.add(
+            Report(
+              pkey: pkey,
+              uid: reportData['uuid'], // Matches Firestore field
+              description: reportData['description'],
+              category: reportData['category'],
+              latitude: (reportData['latitude'] as num).toDouble(),
+              longitude: (reportData['longitude'] as num).toDouble(),
+              createdAt: reportData['createdAt'] ?? Timestamp.now(),
+              aiAnalysis: analysisQuery.docs.first.data(),
+              gamification: gamificationQuery.docs.first.data(),
+            ),
+          );
+        }
+      }
+      return reports;
+    });
   }
 }

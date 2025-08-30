@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
                 ? const CircularProgressIndicator()
                 : ElevatedButton.icon(
                     onPressed: _handleSignIn,
-                    icon: Image.asset('assets/google_logo.png', height: 24.0),
+                    icon: Image.asset('images/google_logo.png', height: 24.0),
                     label: const Text('Sign in with Google'),
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.black,

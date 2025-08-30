@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:ecowatch/models/user_profile.dart'; // Import the model
 import '../services/app_service.dart';
 
 class CreateProfilePage extends StatefulWidget {
@@ -20,7 +21,6 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill the name from the user's Google account.
     _nameController.text = widget.user.displayName ?? '';
   }
 
@@ -34,13 +34,18 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
-        await _appService.createUserProfile(
+        // FIX: Create a UserProfile object to pass to the service.
+        final newUserProfile = UserProfile(
           uid: widget.user.uid,
           name: _nameController.text.trim(),
           email: widget.user.email!,
           role: _selectedRole,
+          points: 0, // Default values for new users
+          badges: '', // Default values for new users
         );
-        // After creation, the AuthWrapper will automatically navigate to HomePage.
+
+        await _appService.createUserProfile(newUserProfile);
+        // Navigation is handled by AuthWrapper after profile creation.
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

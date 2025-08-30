@@ -10,7 +10,6 @@ class UserProfile {
   final String badges;
 
   /// Constructor that initializes all the final fields.
-  /// The 'required' keyword ensures they are all provided when a UserProfile is created.
   UserProfile({
     required this.uid,
     required this.email,
@@ -20,11 +19,12 @@ class UserProfile {
     required this.badges,
   });
 
-  /// Factory constructor to create a UserProfile from a Firestore document.
-  factory UserProfile.fromFirestore(DocumentSnapshot doc) {
-    Map data = doc.data() as Map<String, dynamic>;
+  /// Factory constructor to create a UserProfile from a Firestore document map.
+  factory UserProfile.fromJson(Map<String, dynamic> data) {
     return UserProfile(
-      uid: doc.id,
+      // The UID is not in the document data itself, so handle it separately or expect it in the map.
+      // For this implementation, we assume it's passed into the map.
+      uid: data['uid'] ?? '',
       email: data['email'] ?? '',
       name: data['name'] ?? '',
       role: data['role'] ?? 'user',
@@ -32,5 +32,16 @@ class UserProfile {
       badges: data['badges'] ?? '',
     );
   }
-}
 
+  /// Converts this UserProfile object into a Map format for Firestore.
+  Map<String, dynamic> toJson() {
+    return {
+      'uid': uid,
+      'email': email,
+      'name': name,
+      'role': role,
+      'points': points,
+      'badges': badges,
+    };
+  }
+}
