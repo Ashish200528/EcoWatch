@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "807891627705",
+    "project_id": "ecowatch-67ca0",
+    "storage_bucket": "ecowatch-67ca0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:807891627705:android:7c052c80255d892b603568",
+        "android_client_info": {
+          "package_name": "com.example.ecowatch"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "807891627705-3m7d2v2sfaci0s4fvomr2npr83tlas05.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5hw4lIbsyBRBuTcsOobU3Qpgkh2uNhLE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "807891627705-3m7d2v2sfaci0s4fvomr2npr83tlas05.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
